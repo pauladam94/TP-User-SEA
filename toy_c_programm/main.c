@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/prctl.h>
 
-// function compute p ^ n
 int puissance(int p, int n) {
     if (n < 0) {
         printf("n suppose to be positive");
@@ -15,6 +15,8 @@ int puissance(int p, int n) {
 }
 
 int main(int argc, char **argv) {
+    // prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY);
+    
     if (argc < 3) {
         printf("no enough arguments");
         return EXIT_FAILURE;

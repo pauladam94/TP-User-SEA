@@ -5,6 +5,6 @@
 int main() {
     printf("Hello, World!\n");
     
-    // int a = ptrace(PT_TRACE_ME; )
+    int a = ptrace(PT_TRACE_ME, NULL ,NULL, 0  );
     return 0;
 }
