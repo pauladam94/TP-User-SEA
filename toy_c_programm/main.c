@@ -15,7 +15,7 @@ int puissance(int p, int n) {
 }
 
 int main(int argc, char **argv) {
-    // prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY);
+    prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY);
     
     if (argc < 3) {
         printf("no enough arguments");
