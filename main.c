@@ -1,6 +1,10 @@
 #include <stdio.h>
+#include <sys/types.h>
+#include <sys/ptrace.h>
 
 int main() {
     printf("Hello, World!\n");
+    
+    // int a = ptrace(PT_TRACE_ME; )
     return 0;
 }
