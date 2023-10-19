@@ -23,5 +23,11 @@ int main(int argc, char **argv) {
     }
     int p = atoi(argv[1]);
     int n = atoi(argv[2]);
-    printf("%d ^ %d = %d", p, n, puissance(p, n));
+    printf("Adresse de la puissance : %p", puissance);
+    for (int i = 0; i<p;i++){
+        for (int j = 0; j<n;j++){
+            printf("%d ^ %d = %d\n", i, j, puissance(i, j));
+        }
+    }
+    
 }
