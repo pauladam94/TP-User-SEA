@@ -18,12 +18,13 @@ int main(int argc, char **argv) {
     prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY);
     
     if (argc < 3) {
-        printf("no enough arguments");
+        printf("no enough arguments\n");
         return EXIT_FAILURE;
     }
     int p = atoi(argv[1]);
     int n = atoi(argv[2]);
-    printf("Adresse de la puissance : %p", puissance);
+    printf("Adresse de la puissance : %p\n", puissance);
+
     for (int i = 0; i<p;i++){
         for (int j = 0; j<n;j++){
             printf("%d ^ %d = %d\n", i, j, puissance(i, j));
