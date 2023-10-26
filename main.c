@@ -33,11 +33,13 @@ int write_memory(int adr, int inst, int pid) {
     printf("Erreur d'ecriture dans le fichier\n");
     return -1;
   }
+  
   fclose(f);
+  return 0;
 };
 
 int main() {
-  int process_pid = 11823;
+  int process_pid = 12487;
   int adr_fun = 0x401156;
 
   // 1. Attacher au processus cible
