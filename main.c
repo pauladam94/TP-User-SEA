@@ -4,15 +4,24 @@
 #include <sys/types.h>
 #include <string.h>
 
-int write_memory(int adr, int inst, int pid) {
-  // change pid by pid_value
+long str_to_hexa(char * s) {
+ long result = 0;
+ int c;
+ int w=0;
+  while (w<strlen(s)-1) {
+   result = result << 4;
+   if (c=(*(s+w)-'0'),(c>=0 && c <=9)) result|=c;
+   else if (c=(*(s+w)-'A'),(c>=0 && c <=5)) result|=(c+10);
+   else if (c=(*(s+w)-'a'),(c>=0 && c <=5)) result|=(c+10);
+   else break;
+   ++w;
+  }
+ return result;
+}
 
-  char path[100] = "/proc/";
-  char pid_s[10];
-  sprintf(pid_s,"%d",pid);
-  strcat(path,pid_s);
-  strcat(path, "/mem");
-
+int write_memory(long adr, int inst, int pid) {
+  char path[16];
+  sprintf(path, "/proc/%d/mem", pid);
   printf("path : %s\n", path);
   printf("adr : 0x%X\ninst : 0x%X\n", adr, inst);
 
@@ -22,25 +31,74 @@ int write_memory(int adr, int inst, int pid) {
     return -1;
   }
 
-  printf("*f before fseek : 0x%X\n", *f);
   if(fseek(f, adr, SEEK_SET) == -1){
     printf("Erreur de placement dans le fichier\n");
     return -1;
   }
-  printf("*f after fseek : 0x%X\n", *f);
 
   if(fwrite((void*)&inst, 1, sizeof(int),f) == 0){
     printf("Erreur d'ecriture dans le fichier\n");
     return -1;
   }
-  
+
   fclose(f);
   return 0;
-};
+}
 
-int main() {
-  int process_pid = 12487;
-  int adr_fun = 0x401156;
+int get_pid(){
+  system("ps -aux | grep \"./main\" | cut -c 12-17 | head -n 1 > pid.txt");
+  
+  FILE* f = fopen("pid.txt","r");
+  if(f==NULL){
+    printf("Erreur lors de la creation du fichier du pid\n");
+    return -1;
+  }
+
+  char pid[100];
+
+  fgets(pid, 100, f);
+  fclose(f);
+
+  system("rm pid.txt");
+
+  printf("pid:%s", pid);
+  
+  int i = atoi(pid);
+  printf("atoi(pid):%d\n", i);
+
+  return i;
+}
+
+long get_adr_fun(char* s){
+  char sys_call[200];
+  sprintf(sys_call, "nm toy_c_programm/main | grep \"%s\" | cut -c 1-16 > adr.txt",s);
+  printf("syscall : %s\n", sys_call);
+  system(sys_call);
+
+  FILE* f = fopen("adr.txt","r");
+  if(f==NULL){
+    printf("Erreur lors de la creation du fichier de l'adresse\n");
+    return -1;
+  }
+
+  char adr[100];
+
+  fgets(adr, 100, f);
+  fclose(f);
+
+  system("rm adr.txt");
+
+  printf("adr:%s", adr);
+  long i = str_to_hexa(adr);
+  printf("hexa adr:%d\n",i);
+
+  return i;
+}
+
+
+int main(int argc, char **argv) {
+  int process_pid = get_pid();
+  long adr_fun = get_adr_fun(argv[1]);
 
   // 1. Attacher au processus cible
   if (ptrace(PTRACE_ATTACH, process_pid, 0, 0) == -1) {
@@ -66,6 +124,8 @@ int main() {
     printf("Erreur lors de l'appel de write_memory\n");
     return -1;
   }
+  
+
 
   // 4. Continuer l'exécution du processus
   // ptrace(PTRACE_CONT, process_pid, 0, 0);
