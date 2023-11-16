@@ -110,6 +110,25 @@ int main(int argc, char **argv) {
   int status;
   printf("pid: %d\n",waitpid(process_pid, &status, 0));
 
+
+  // Recupere la valeur des registres
+  int* data;
+  int* addr;
+  ptrace(PTRACE_GETREGS, process_pid, data, addr);
+
+
+  // Modifier le code du processus
+
+
+
+  // Modifier les valeurs des registres
+  ptrace(PTRACE_SETREGS, process_pid, data, addr);
+
+
+
+
+
+
   // 2. Attendre que le processus cible atteigne la fonction spécifique
   /*while(1){
       int status;
@@ -129,7 +148,7 @@ int main(int argc, char **argv) {
 
 
   // 4. Continuer l'exécution du processus
-  // ptrace(PTRACE_CONT, process_pid, 0, 0);
+  ptrace(PTRACE_CONT, process_pid, 0, 0);
 
   // 5. Détacher du processus
   ptrace(PTRACE_DETACH, process_pid, 0, 0);
