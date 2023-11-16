@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/prctl.h>
-#include <time.h>
+#include <sys/ptrace.h>
+#include <sys/types.h>
+#include <string.h>
 
 
 long str_to_hexa(char * s) {
