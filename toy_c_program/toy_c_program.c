@@ -38,15 +38,15 @@ int main(int argc, char **argv) {
     }*/
     int p = 2000;//atoi(argv[1]);
     int n = 2000;//atoi(argv[2]);
-    printf("Adresse de infinite : %p\n", infinite);
+    //printf("Adresse de infinite : %p\n", infinite);
 
     while(1){        
-        // clock_t begin = clock();
+        clock_t begin = clock();
         infinite(p,n);
         printf("done\n");
-        // clock_t end = clock();        
-        // double time_spent = (double) (end - begin) / CLOCKS_PER_SEC;
-        // printf("p = %d, n = %d, time spent = %f s\n", p, n, time_spent);
+        clock_t end = clock();        
+        double time_spent = (double) (end - begin) / CLOCKS_PER_SEC;
+        printf("p = %d, n = %d, time spent = %f s\n", p, n, time_spent);
     }
     
 }
