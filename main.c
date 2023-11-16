@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/ptrace.h>
-#include <sys/types.h>
-#include <string.h>
+#include <sys/prctl.h>
+#include <time.h>
+
 
 long str_to_hexa(char * s) {
  long result = 0;
@@ -132,4 +132,5 @@ int main(int argc, char **argv) {
 
   // 5. Détacher du processus
   ptrace(PTRACE_DETACH, process_pid, 0, 0);
+
 }
