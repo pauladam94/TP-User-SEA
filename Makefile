@@ -7,6 +7,9 @@ toy:
 clean:
 	rm TP_User_SEA
 	rm toy_c_program/toy_c_program
+
+run:
+	./TP_User_SEA puissance addition
 	
 full:
 	make user

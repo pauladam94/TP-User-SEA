@@ -3,6 +3,7 @@
 #include <sys/ptrace.h>
 #include <sys/types.h>
 #include <string.h>
+#include <sys/user.h>
 
 
 long str_to_hexa(char * s) {
@@ -20,13 +21,17 @@ long str_to_hexa(char * s) {
  return result;
 }
 
-int write_memory(long adr, int inst, int pid) {
+int write_memory(long adr, char* inst, int length, int pid, char* res) {
   char path[16];
+  printf("length : %d\n",length);
   sprintf(path, "/proc/%d/mem", pid);
   printf("path : %s\n", path);
-  printf("adr : 0x%X\ninst : 0x%X\n", adr, inst);
+  printf("adr : 0x%X\n",adr);
+  for(int i = 0;i<length;i++){
+    printf("inst : 0x%X\n", inst[i]);
+  }
 
-  FILE *f = fopen(path, "wb");
+  FILE *f = fopen(path, "r+");
   if (f == NULL) {
     printf("Erreur dans l'ouverture du fichier memoire du processus\n");
     return -1;
@@ -37,17 +42,42 @@ int write_memory(long adr, int inst, int pid) {
     return -1;
   }
 
-  if(fwrite((void*)&inst, 1, sizeof(int),f) == 0){
-    printf("Erreur d'ecriture dans le fichier\n");
+  if(fread(res, length, sizeof(char),f)==0){
+    printf("Erreur de lecture dans le fichier\n");
     return -1;
   }
+  
+  for(int i = 0;i<length;i++){
+    printf("instruction %d sauvegardée : 0x%X\n", i, res[i]);
+  }
+
+  if(fseek(f, adr, SEEK_SET) == -1){
+    printf("Erreur de placement dans le fichier\n");
+    return -1;
+  }
+  int test = fwrite(inst, length, sizeof(char),f);
+  if(test == 0){
+        printf("Erreur d'ecriture dans le fichier\n");
+        printf("test : %d\n", test);
+        return -1;
+  }
+
+  /*for(int i = 0;i<length;i++){
+    printf("i:%d\n",i);
+    if(fwrite((void*)&(inst[i]), 1, sizeof(int),f) == 0){
+        printf("Erreur d'ecriture dans le fichier\n");
+        return -1;
+    }
+  }*/
+
+  
 
   fclose(f);
   return 0;
 }
 
 int get_pid(){
-  system("ps -aux | grep \"./main\" | cut -c 12-17 | head -n 1 > pid.txt");
+  system("ps -aux | grep \"./toy_c_program/toy_c_program\" | cut -c 12-17 | head -n 1 > pid.txt");
   
   FILE* f = fopen("pid.txt","r");
   if(f==NULL){
@@ -72,7 +102,7 @@ int get_pid(){
 
 long get_adr_fun(char* s){
   char sys_call[200];
-  sprintf(sys_call, "nm toy_c_programm/main | grep \"%s\" | cut -c 1-16 > adr.txt",s);
+  sprintf(sys_call, "nm toy_c_program/toy_c_program | grep \"%s\" | cut -c 1-16 > adr.txt",s);
   printf("syscall : %s\n", sys_call);
   system(sys_call);
 
@@ -98,8 +128,10 @@ long get_adr_fun(char* s){
 
 
 int main(int argc, char **argv) {
+  printf("sizeof(int) = %d\n",sizeof(int));
   int process_pid = get_pid();
-  long adr_fun = get_adr_fun(argv[1]);
+  long addr_puissance= get_adr_fun(argv[1]);
+  long addr_puissance_opti= get_adr_fun(argv[2]);
 
   // 1. Attacher au processus cible
   if (ptrace(PTRACE_ATTACH, process_pid, 0, 0) == -1) {
@@ -110,42 +142,63 @@ int main(int argc, char **argv) {
   int status;
   printf("pid: %d\n",waitpid(process_pid, &status, 0));
 
+  // Tester le cas pthologique ou PC = adr ou PC = adr+1 ou Pc = adr+2
 
-  // Recupere la valeur des registres
-  int* data;
-  int* addr;
-  ptrace(PTRACE_GETREGS, process_pid, data, addr);
-
-
-  // Modifier le code du processus
-
-
-
-  // Modifier les valeurs des registres
-  ptrace(PTRACE_SETREGS, process_pid, data, addr);
-
-
-
-
-
-
-  // 2. Attendre que le processus cible atteigne la fonction spécifique
-  /*while(1){
-      int status;
-      waitpid(process_pid, &status, 0);
-      if (status == adr_fun) break;
-  }*/
+  
 
   // 3. Modifier dynamiquement le code
   // Remplacez la première instruction de la fonction par 0xCC (instruction de
   // trap)
-  int new_inst = 0xCC;
-  if(write_memory(adr_fun, new_inst, process_pid) == -1){
+  int length = 4;
+  char new_inst[4] = {0xCC,0xFF,0xD0,0xCC};
+  char sauv_line[4]; // 20 = taille max d'une instruction (x86 CrInGe)
+  if(write_memory(addr_puissance, new_inst, length, process_pid, sauv_line) == -1){
     printf("Erreur lors de l'appel de write_memory\n");
     return -1;
   }
+
+  ptrace(PTRACE_CONT, process_pid, 0, 0);
+
+  // Wait for the first trap 
+  printf("pid: %d\n",waitpid(process_pid, &status, 0));
   
 
+
+
+  // Recupere la valeur des registres
+  
+  struct user_regs_struct data;
+  ptrace(PTRACE_GETREGS, process_pid, 0, &data);
+
+  // Modifier les registres pour call la bonne fonction
+
+  data.rax = addr_puissance_opti;
+  /*data.rdi = 2;
+  data.rsi = 2;*/
+
+  // Modifier les valeurs des registres
+  ptrace(PTRACE_SETREGS, process_pid, 0, &data);
+
+
+  ptrace(PTRACE_CONT, process_pid, 0, 0);
+  // Wait for the second trap 
+  printf("pid: %d\n",waitpid(process_pid, &status, 0));
+
+  ptrace(PTRACE_GETREGS, process_pid, 0, &data);
+  printf("rax : %d\n",data.rax);
+
+  // Reecriture des lignes effacees
+  // fwrite sauv_line addr : addr_puissance
+
+  char buffer[4];
+
+  if(write_memory(addr_puissance, sauv_line, length, process_pid, buffer) == -1){
+    printf("Erreur lors de l'appel de write_memory\n");
+    return -1;
+  }
+
+
+  ptrace(PTRACE_CONT, process_pid, 0, 0);
 
   // 4. Continuer l'exécution du processus
   ptrace(PTRACE_CONT, process_pid, 0, 0);

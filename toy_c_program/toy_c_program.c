@@ -24,9 +24,9 @@ void infinite(int p, int n){
     }
 }
 
-int addition(int p, int n){
+int addition(){//int p, int n){
     printf("addition\n");
-    return 0;
+    return 42;
 }
 
 int main(int argc, char **argv) {
@@ -39,6 +39,8 @@ int main(int argc, char **argv) {
     int p = 2000;//atoi(argv[1]);
     int n = 2000;//atoi(argv[2]);
     //printf("Adresse de infinite : %p\n", infinite);
+
+    addition(0,0);
 
     while(1){        
         clock_t begin = clock();
