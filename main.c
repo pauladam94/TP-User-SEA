@@ -6,6 +6,7 @@
 #include <sys/user.h>
 
 
+
 long str_to_hexa(char * s) {
  long result = 0;
  int c;
@@ -144,8 +145,6 @@ int main(int argc, char **argv) {
 
   // Tester le cas pthologique ou PC = adr ou PC = adr+1 ou Pc = adr+2
 
-  
-
   // 3. Modifier dynamiquement le code
   // Remplacez la première instruction de la fonction par 0xCC (instruction de
   // trap)
@@ -153,7 +152,7 @@ int main(int argc, char **argv) {
   char new_inst[4] = {0xCC,0xFF,0xD0,0xCC};
   char sauv_line[4]; // 20 = taille max d'une instruction (x86 CrInGe)
   if(write_memory(addr_puissance, new_inst, length, process_pid, sauv_line) == -1){
-    printf("Erreur lors de l'appel de write_memory\n");
+    printf("Erreur lors de l'appel de write_memory pour trap call trap\n");
     return -1;
   }
 
@@ -167,25 +166,53 @@ int main(int argc, char **argv) {
 
   // Recupere la valeur des registres
   
-  struct user_regs_struct data;
-  ptrace(PTRACE_GETREGS, process_pid, 0, &data);
+  struct user_regs_struct regs;
+  struct user_regs_struct sauv_regs;
+  ptrace(PTRACE_GETREGS, process_pid, 0, &sauv_regs);
+  ptrace(PTRACE_GETREGS, process_pid, 0, &regs);
+
 
   // Modifier les registres pour call la bonne fonction
 
-  data.rax = addr_puissance_opti;
-  /*data.rdi = 2;
-  data.rsi = 2;*/
+
+  // Incrementer le pointeur de plie
+  // Mettre qqch dans le pointeur de pile
+  // Modifier les parametres de la fonction
+  // Tester la valeur de retour
+
+  // On incremente le pointeur de pile
+  regs.rsp -= sizeof(int);
+  // On ajoute une valeur dans la pile
+  printf("regs.rsp : %p\n", regs.rsp);
+  length = 4;
+  char new_val[4] = {123,0,0,0};
+  char res[4] = {0,0,0,0};
+
+  if(write_memory(regs.rsp,new_val,length,process_pid,res) == -1){
+    printf("Erreur lors de l'appel de write_memory pour changer la stack\n");
+    return -1;
+  }
+
+
+  // int x = 3;
+
+  regs.rax = addr_puissance_opti;
+  // TODO : ajouter un element sur la pile et donner l'adresse du haut de pile a la fonction
+  regs.rdi = regs.rsp; // On pases en parametre un pointeur vers le sommet de la pile
+  /*regs.rsi = 0;
+  regs.rdx = 0;*/
+
 
   // Modifier les valeurs des registres
-  ptrace(PTRACE_SETREGS, process_pid, 0, &data);
-
+  ptrace(PTRACE_SETREGS, process_pid, 0, &regs);
+  
 
   ptrace(PTRACE_CONT, process_pid, 0, 0);
   // Wait for the second trap 
   printf("pid: %d\n",waitpid(process_pid, &status, 0));
 
-  ptrace(PTRACE_GETREGS, process_pid, 0, &data);
-  printf("rax : %d\n",data.rax);
+  ptrace(PTRACE_GETREGS, process_pid, 0, &regs);
+  printf("rax : %d\n",regs.rax);
 
   // Reecriture des lignes effacees
   // fwrite sauv_line addr : addr_puissance
@@ -193,12 +220,16 @@ int main(int argc, char **argv) {
   char buffer[4];
 
   if(write_memory(addr_puissance, sauv_line, length, process_pid, buffer) == -1){
-    printf("Erreur lors de l'appel de write_memory\n");
+    printf("Erreur lors de l'appel de write_memory pour restore\n");
     return -1;
   }
+  sauv_regs.rip = sauv_regs.rip -1;
+
+  ptrace(PTRACE_SETREGS, process_pid, 0, &sauv_regs);
 
 
   ptrace(PTRACE_CONT, process_pid, 0, 0);
+
 
   // 4. Continuer l'exécution du processus
   ptrace(PTRACE_CONT, process_pid, 0, 0);
