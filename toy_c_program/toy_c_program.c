@@ -24,9 +24,9 @@ void infinite(int p, int n){
     }
 }
 
-int addition(int *t){//int p, int n){
+int* addition(int *t){//int p, int n){
     printf("addition, %d\n", *t);
-    return 42;
+    return t;
 }
 
 int main(int argc, char **argv) {
