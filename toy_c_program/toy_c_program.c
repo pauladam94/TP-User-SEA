@@ -15,6 +15,24 @@ int puissance(int p, int n) {
     return result;
 }
 
+int puissance_opti(int p, int n) {
+    int result = p;
+    if (n < 0) {
+        printf("n suppose to be positive");
+        return EXIT_FAILURE;
+    }
+    while (n > 1) {
+        if (n % 2 == 0) {
+            result = result * result;
+            n = n / 2;
+        } else {
+            result = result * p;
+            n = n - 1;
+        }
+    }
+    return result;
+}
+
 void infinite(int p, int n){
     for (int i = 0; i<p;i++){
         for (int j = 0; j<n;j++){
