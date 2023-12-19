@@ -7,11 +7,13 @@
 #include <sys/types.h>
 #include <sys/user.h>
 
-long str_to_hexa(char *s) {
+long str_to_hexa(char *s)
+{
   long result = 0;
   int c;
   int w = 0;
-  while (w < strlen(s) - 1) {
+  while (w < strlen(s) - 1)
+  {
     result = result << 4;
     if (c = (*(s + w) - '0'), (c >= 0 && c <= 9))
       result |= c;
@@ -28,22 +30,26 @@ long str_to_hexa(char *s) {
 
 // int read_memory(long adr, int length, int pid, char *res)
 //
-int read_memory(long adr, int length, int pid, char *res) {
+int read_memory(long adr, int length, int pid, char *res)
+{
   char path[16];
   sprintf(path, "/proc/%d/mem", pid);
 
   FILE *f = fopen(path, "r+");
-  if (f == NULL) {
+  if (f == NULL)
+  {
     printf("Erreur dans l'ouverture du fichier memoire du processus\n");
     return -1;
   }
 
-  if (fseek(f, adr, SEEK_SET) == -1) {
+  if (fseek(f, adr, SEEK_SET) == -1)
+  {
     printf("Erreur de placement dans le fichier\n");
     return -1;
   }
 
-  if (fread(res, length, sizeof(char), f) == 0) {
+  if (fread(res, length, sizeof(char), f) == 0)
+  {
     printf("Erreur de lecture dans le fichier\n");
     return -1;
   }
@@ -53,42 +59,50 @@ int read_memory(long adr, int length, int pid, char *res) {
 }
 
 // TODO rename res
-int write_memory(long adr, char *inst, int length, int pid, char *res) {
+int write_memory(long adr, char *inst, int length, int pid, char *res)
+{
   char path[16];
   printf("length : %d\n", length);
   sprintf(path, "/proc/%d/mem", pid);
   printf("path : %s\n", path);
   printf("adr : 0x%X\n", adr);
-  for (int i = 0; i < length; i++) {
+  for (int i = 0; i < length; i++)
+  {
     printf("inst : 0x%X\n", inst[i]);
   }
 
   FILE *f = fopen(path, "r+");
-  if (f == NULL) {
+  if (f == NULL)
+  {
     printf("Erreur dans l'ouverture du fichier memoire du processus\n");
     return -1;
   }
 
-  if (fseek(f, adr, SEEK_SET) == -1) {
+  if (fseek(f, adr, SEEK_SET) == -1)
+  {
     printf("Erreur de placement dans le fichier\n");
     return -1;
   }
 
-  if (fread(res, length, sizeof(char), f) == 0) {
+  if (fread(res, length, sizeof(char), f) == 0)
+  {
     printf("Erreur de lecture dans le fichier\n");
     return -1;
   }
 
-  for (int i = 0; i < length; i++) {
+  for (int i = 0; i < length; i++)
+  {
     printf("instruction %d sauvegardée : 0x%X\n", i, res[i]);
   }
 
-  if (fseek(f, adr, SEEK_SET) == -1) {
+  if (fseek(f, adr, SEEK_SET) == -1)
+  {
     printf("Erreur de placement dans le fichier\n");
     return -1;
   }
   int test = fwrite(inst, length, sizeof(char), f);
-  if (test == 0) {
+  if (test == 0)
+  {
     printf("Erreur d'ecriture dans le fichier\n");
     printf("test : %d\n", test);
     return -1;
@@ -98,12 +112,14 @@ int write_memory(long adr, char *inst, int length, int pid, char *res) {
   return 0;
 }
 
-int get_pid() {
+int get_pid()
+{
   system("ps -aux | grep \"./toy_c_program/toy_c_program\" | cut -c 12-17 | "
          "head -n 1 > pid.txt");
 
   FILE *f = fopen("pid.txt", "r");
-  if (f == NULL) {
+  if (f == NULL)
+  {
     printf("Erreur lors de la creation du fichier du pid\n");
     return -1;
   }
@@ -123,7 +139,8 @@ int get_pid() {
   return i;
 }
 
-long get_adr_fun(char *s) {
+long get_adr_fun(char *s)
+{
   char sys_call[200];
   sprintf(
       sys_call,
@@ -133,7 +150,8 @@ long get_adr_fun(char *s) {
   system(sys_call);
 
   FILE *f = fopen("adr.txt", "r");
-  if (f == NULL) {
+  if (f == NULL)
+  {
     printf("Erreur lors de la creation du fichier de l'adresse\n");
     return -1;
   }
@@ -153,15 +171,17 @@ long get_adr_fun(char *s) {
 }
 
 int trap_call_trap(long addr_write_in_fun, int process_pid, long addr_fun_call,
-                   int *args_fun, bool *args_ptr, char *new_value_stack,
-                   char *return_param, int stack_push_size) {
+                   long long int *args_fun, bool *args_ptr, char *new_value_stack,
+                   char *return_param, int stack_push_size)
+{
   int status;
   // 3. Modifier dynamiquement le code : trap call trap
   const int length = 4;
   char new_inst[4] = {0xCC, 0xFF, 0xD0, 0xCC};
   char sauv_line[4]; // 20 = taille max d'une instruction (x86 CrInGe)
   if (write_memory(addr_write_in_fun, new_inst, length, process_pid,
-                   sauv_line) == -1) {
+                   sauv_line) == -1)
+  {
     printf("Erreur lors de l'appel de write_memory pour trap call trap\n");
     return -1;
   }
@@ -180,9 +200,11 @@ int trap_call_trap(long addr_write_in_fun, int process_pid, long addr_fun_call,
 
   long long int *registr[3] = {&(regs.rdi), &(regs.rsi), &(regs.rdx)};
   int offset = 0;
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 3; i++)
+  {
     // Modifier les registres pour call la bonne fonction
-    if (args_ptr[i]) { // si le premier argument est un pointeur
+    if (args_ptr[i])
+    { // si le premier argument est un pointeur
       // On incremente le pointeur de pile
       regs.rsp -= args_fun[i];
       // On ajoute une valeur dans la pile
@@ -194,7 +216,8 @@ int trap_call_trap(long addr_write_in_fun, int process_pid, long addr_fun_call,
              offset);
 
       if (write_memory(regs.rsp, new_value_stack + offset, args_fun[i],
-                       process_pid, buffer) == -1) {
+                       process_pid, buffer) == -1)
+      {
         printf(
             "Erreur lors de l'appel de write_memory pour changer la stack\n");
         return -1;
@@ -202,7 +225,9 @@ int trap_call_trap(long addr_write_in_fun, int process_pid, long addr_fun_call,
       *(registr[i]) = regs.rsp; // On pases en parametre un pointeur vers le
                                 // sommet de la pile
       offset += args_fun[i];
-    } else {
+    }
+    else
+    {
       *(registr[i]) = args_fun[i];
     }
   }
@@ -222,7 +247,8 @@ int trap_call_trap(long addr_write_in_fun, int process_pid, long addr_fun_call,
 
   ptrace(PTRACE_GETREGS, process_pid, 0, &regs);
   printf("rax : %p\n", regs.rax);
-  for (int i = 0; i < stack_push_size; i++) {
+  for (int i = 0; i < stack_push_size; i++)
+  {
     char res;
     read_memory(regs.rsp + i * sizeof(char), 1, process_pid, &res);
     return_param[i] = res;
@@ -237,7 +263,8 @@ int trap_call_trap(long addr_write_in_fun, int process_pid, long addr_fun_call,
   // printf("Réecriture des lignes\n");
 
   if (write_memory(addr_write_in_fun, sauv_line, length, process_pid, buffer) ==
-      -1) {
+      -1)
+  {
     printf("Erreur lors de l'appel de write_memory pour restore\n");
     return -1;
   }
@@ -250,16 +277,20 @@ int trap_call_trap(long addr_write_in_fun, int process_pid, long addr_fun_call,
   return 0;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
   printf("sizeof(int) = %d\n", sizeof(int));
   int process_pid = get_pid();
   long addr_puissance = get_adr_fun(argv[1]);
   long addr_puissance_opti = get_adr_fun(argv[2]);
   long addr_posix_memalign = get_adr_fun("posix_memalign");
-  long addr_mprotect = get_adr_fun("mprotect");
+  long addr_mprotect = get_adr_fun("__mprotect");
+
+  printf("long addr_mprotect : %p", addr_mprotect);
 
   // 1. Attacher au processus cible
-  if (ptrace(PTRACE_ATTACH, process_pid, 0, 0) == -1) {
+  if (ptrace(PTRACE_ATTACH, process_pid, 0, 0) == -1)
+  {
     printf("ptrace_attach a echoue\n");
     return -1;
   }
@@ -268,11 +299,8 @@ int main(int argc, char **argv) {
   //   int status;
   //   printf("pid: %d\n", waitpid(process_pid, &status, 0));
   //   int size_code = 10;
-  //   int args_fun[3] = {sizeof(int), 0, 0};
+  //   long long int args_fun[3] = {sizeof(int), 0, 0};
   //   bool args_ptr[3] = {true, false, false};
-
-  //   // int args_fun[3] = {sizeof(int), 0, 0};
-  //   // bool args_ptr[3] = {true, false, false};
   //   int stack_push_size = 0;
   //   for (int i = 0; i < 3; i++) {
   //     if (args_ptr[i]) {
@@ -306,14 +334,16 @@ int main(int argc, char **argv) {
   int status;
   printf("pid: %d\n", waitpid(process_pid, &status, 0));
 
-  int args_fun[3] = {sizeof(long long int), getpagesize(), size_code};
+  long long int args_fun[3] = {sizeof(long long int), getpagesize(), size_code};
   bool args_ptr[3] = {true, false, false};
 
   // int args_fun[3] = {sizeof(int), 0, 0};
   // bool args_ptr[3] = {true, false, false};
   int stack_push_size = 0;
-  for (int i = 0; i < 3; i++) {
-    if (args_ptr[i]) {
+  for (int i = 0; i < 3; i++)
+  {
+    if (args_ptr[i])
+    {
       stack_push_size += args_fun[i];
     }
   }
@@ -323,7 +353,8 @@ int main(int argc, char **argv) {
   // Tester le cas pathologique ou PC = adr ou PC = adr+1 ou Pc = adr+2
   if (trap_call_trap(addr_puissance, process_pid, addr_posix_memalign, args_fun,
                      args_ptr, new_value_stack, return_stack,
-                     stack_push_size) == -1) {
+                     stack_push_size) == -1)
+  {
     printf("Erreur dans trap call trap posix mem align\n");
     return -1;
   };
@@ -334,29 +365,35 @@ int main(int argc, char **argv) {
 
   printf("--------------trap call trap mprotect\n");
 
+  char return_stack_mprotect[4] = {0};
+
   printf("sizeof ptr: %d\n", sizeof(addr_puissance_opti));
   status;
   // printf("pid: %d\n", waitpid(process_pid, &status, 0));
-  int args_fun_mprotect[3] = {sizeof(long long int), size_code,
-                              PROT_EXEC | PROT_WRITE | PROT_READ};
-  bool args_ptr_mprotect[3] = {true, false, false};
+  long long int args_fun_mprotect[3] = {(long long int)return_stack, size_code,
+                                        PROT_EXEC | PROT_WRITE | PROT_READ};
+  bool args_ptr_mprotect[3] = {false, false, false};
 
   // int args_fun[3] = {sizeof(int), 0, 0};
   // bool args_ptr[3] = {true, false, false};
   stack_push_size = 0;
-  for (int i = 0; i < 3; i++) {
-    if (args_ptr[i]) {
+  for (int i = 0; i < 3; i++)
+  {
+    if (args_ptr[i])
+    {
       stack_push_size += args_fun[i];
     }
   }
-  char new_value_stack_mprotect[8] = {
-      return_stack[0], return_stack[1], return_stack[2], return_stack[3],
-      return_stack[4], return_stack[5], return_stack[6], return_stack[7]};
+  char new_value_stack_mprotect[8] = {0};
+  // char new_value_stack_mprotect[8] = {
+  //     return_stack[0], return_stack[1], return_stack[2], return_stack[3],
+  //     return_stack[4], return_stack[5], return_stack[6], return_stack[7]};
 
   // Tester le cas pathologique ou PC = adr ou PC = adr+1 ou Pc = adr+2
   if (trap_call_trap(addr_puissance, process_pid, addr_mprotect, args_fun,
-                     args_ptr, new_value_stack_mprotect, return_stack,
-                     stack_push_size) == -1) {
+                     args_ptr, new_value_stack_mprotect, return_stack_mprotect,
+                     stack_push_size) == -1)
+  {
     printf("Erreur dans trap call trap mprotect\n");
     return -1;
   };
@@ -365,7 +402,8 @@ int main(int argc, char **argv) {
   char buffer[113];
   printf("Ecriture du programme dans la heap\n");
   if (write_memory(addr_puissance_opti_heap, code, size_code, process_pid,
-                   buffer) == -1) {
+                   buffer) == -1)
+  {
     printf(
         "Erreur lors de l'appel de write_memory du programme dans la heap\n");
     return -1;
@@ -387,7 +425,8 @@ int main(int argc, char **argv) {
                         return_stack[6],
                         return_stack[7]};
   if (write_memory(addr_puissance, jump_code, 10, process_pid, buffer_jump) ==
-      -1) {
+      -1)
+  {
     printf(
         "Erreur lors de l'appel de write_memory du programme dans la heap\n");
     return -1;
