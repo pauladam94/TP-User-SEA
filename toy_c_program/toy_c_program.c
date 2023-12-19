@@ -18,8 +18,13 @@ int puissance(int p, int n)
     return result;
 }
 
-int puissance_opti(int p, int n)
-{
+int puissance_opti2(int p, int n) {
+    int a = p + n;
+    printf("puissance_opti2 %d, %d", p, n);
+    return 42;
+}
+
+int puissance_opti(int p, int n){
     int result = p;
     if (n < 0)
     {

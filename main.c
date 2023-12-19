@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,7 +39,7 @@ int main() {
 // Cette fonction est écrite dans la heap
 // On va donc écrire dans la heap le code de puissance_opti
 // et modifier la fonction puissance pour qu'elle appelle
-// puissance_opti à la place de puissance
+// puissance_opti à la place de son code
 
 /// Convertit une chaine de caractère s en hexadécimal
 long str_to_hexa(char *s)
@@ -92,30 +93,26 @@ int read_memory(long adr, int length, int pid, char *buffer)
   {
     printf("Erreur de fermeture du fichier\n");
     return EXIT_FAILURE;
-  };
+  }
   return EXIT_SUCCESS;
 }
 
 /// Ecrit dans la mémoire d'un processus tracé (pid) à l'adresse adr
 /// - buffer : pointeur vers la zone mémoire où on veut stocker les lignes de
 ///            code effacées.
+///            si buffer == NULL c'est qu'on ne veut pas récupérer les lignes
+///            précédentes
 /// - pid : pid du processus tracé
 /// - adr : addresse à laquelle on veut lire
 /// - length : nombre d'octets à lire
-/// - inst : instruction à écrire (de taille length)
+/// - inst : instructions à écrire (de taille length)
 /// > return : EXIT_FAILURE si erreur, EXIT_SUCCESS sinon
 int write_memory(long adr, char *inst, int length, int pid, char *buffer)
 {
   char path[16];
-  // printf("length : %d\n", length);
   sprintf(path, "/proc/%d/mem", pid);
   printf("path : %s\n", path);
   printf("adr : 0x%X\n", adr);
-  for (int i = 0; i < length; i++)
-  {
-    // Affichage de toutes les instructions à écrire
-    // printf("inst : 0x%X\n", inst[i]);
-  }
   FILE *f = fopen(path, "r+");
   if (f == NULL)
   {
@@ -127,38 +124,40 @@ int write_memory(long adr, char *inst, int length, int pid, char *buffer)
     printf("Erreur de placement dans le fichier\n");
     return EXIT_FAILURE;
   }
-  if (fread(buffer, length, sizeof(char), f) == 0)
+  if (buffer != NULL)
   {
-    printf("Erreur de lecture dans le fichier\n");
-    return EXIT_FAILURE;
-  }
-  for (int i = 0; i < length; i++)
-  {
-    // Affichage de toutes les instructions sauvegardées
-    printf("Instruction %d sauvegardée : 0x%X\n", i, buffer[i]);
-  }
-  if (fseek(f, adr, SEEK_SET) == -1)
-  {
-    printf("Erreur de placement dans le fichier\n");
-    return EXIT_FAILURE;
+    if (fread(buffer, length, sizeof(char), f) == 0)
+    {
+      printf("Erreur de lecture dans le fichier\n");
+      return EXIT_FAILURE;
+    }
+    if (fseek(f, adr, SEEK_SET) == -1)
+    {
+      printf("Erreur de placement dans le fichier\n");
+      return EXIT_FAILURE;
+    }
   }
   if (fwrite(inst, length, sizeof(char), f) == 0)
   {
     printf("Erreur d'ecriture dans le fichier\n");
     return EXIT_FAILURE;
   }
-  if (fclose(f) != 0)
+  int i;
+  if ((i = fclose(f)) != 0)
   {
-    printf("Erreur de fermeture du fichier\n");
+    printf("Erreur de fermeture du fichier, code error : %d\n", i);
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
 }
 
 /// Récupère le pid du processus à tracer
-/// - return : pid du processus à tracer si succès, EXIT_FAILURE sinon
+/// > return : pid du processus à tracer si succès, EXIT_FAILURE sinon
 int get_pid()
 {
+  printf("syscall : ps -aux | grep \"./toy_c_program/toy_c_program\" | cut -c "
+         "12-17 | "
+         "head -n 1 > pid.txt");
   system("ps -aux | grep \"./toy_c_program/toy_c_program\" | cut -c 12-17 | "
          "head -n 1 > pid.txt");
   FILE *f = fopen("pid.txt", "r");
@@ -178,9 +177,9 @@ int get_pid()
     printf("Erreur de fermeture du fichier\n");
     return EXIT_FAILURE;
   }
+  printf("syscall : rm pid.txt");
   system("rm pid.txt");
   printf("pid:%s", pid);
-  printf("atoi(pid):%d\n", atoi(pid));
   return atoi(pid);
 }
 
@@ -197,14 +196,12 @@ long get_adr_fun(char *s)
       s);
   printf("syscall : %s\n", sys_call);
   system(sys_call);
-
   FILE *f = fopen("adr.txt", "r");
   if (f == NULL)
   {
     printf("Erreur lors de la creation du fichier de l'adresse\n");
     return EXIT_FAILURE;
   }
-
   char adr[100];
   if (fgets(adr, 100, f) == NULL)
   {
@@ -216,35 +213,62 @@ long get_adr_fun(char *s)
     printf("Erreur de fermeture du fichier\n");
     return EXIT_FAILURE;
   }
+  printf("syscall :rm adr.txt\n");
   system("rm adr.txt");
-  printf("adr:%s", adr);
-  printf("hexa adr:%d\n", str_to_hexa(adr));
+  printf("adr:%d\n", str_to_hexa(adr));
   return str_to_hexa(adr);
 }
 
-/// Fonction qui va modifier la fonction puissance pour qu'elle appelle
-/// puissance_opti à la place de puissance
+/// Fonction qui permet d'écrire un appel de la fonction `addr_fun_call`
+/// dans le tracé à l'adresse `addr_write_in_fun`.
+/// Cette fonction est appelée avec des paramètres spécifiques
+/// (qui peuvent être des pointeurs) et on récupère en fin d'appel
+/// les données écrites sur la stack par les paramètres pointeurs.
+/// Le rax est aussi exploitable.
+///
+/// SUPPOSITION : on suppose que la valeur du programm counter n'est pas égale à
+///  `addr_write_in_fun` ni `addr_write_in_fun + 1` ni `addr_write_in_fun + 2`.
+///  Pour les appels à trap_call_trap() dans main() ceci n'est pas vérifié mais
+///  nous n'avons pas eu le temps de le faire.
+///
+/// Ceci se fait en écrivant les instructions
+/// `trap - call - trap` à l'adresse addr_write_in_fun.
+/// On récupère aussi la valeur des registres.
+///
+/// A la fin de l'appel après le second trap :
+/// - on réecrit les valeurs précédentes des registres
+/// - on réecrit les lignes de code qui ont été effacées par
+///   l'écriture de `trap - call - trap`
+///
 /// - addr_write_in_fun : adresse de la fonction à modifier
+///       c'est l'endroit où on écrit `trap - call - trap`
 /// - process_pid : pid du processus à tracer
 /// - addr_fun_call : adresse de la fonction à appeler
-/// - args_fun : arguments de la fonction à appeler
 /// - args_ptr : indique si les arguments sont des pointeurs
+///     (tableau de même taille que args_ptr)
+/// - args_fun : arguments de la fonction qui est à l'adresse `addr_fun_call`
+///   -- args[i] est la taille nécéssaire dans la stack si
+///      args_ptr[i] == true.
+///   -- args[i] est la valeur du paramètre si
+///      args_ptr[i] == false.
 /// - new_value_stack : valeur à mettre dans la pile pour les valeurs
 ///                     pointées
 /// - return_param : valeur de retour de la fonction appelée
 /// - stack_push_size : taille de la pile à modifier (pour les paramètres
 /// pointeurs)
+/// - return_value : si return_value != NULL alors il stocke la valeur de retour
+///   de l'appel de la fonction `addr_fun_call`
 /// > return : EXIT_FAILURE si erreur, EXIT_SUCCESS sinon
 int trap_call_trap(long addr_write_in_fun, int process_pid, long addr_fun_call,
                    long long int *args_fun, bool *args_ptr,
                    char *new_value_stack, char *return_param,
-                   int stack_push_size)
+                   int stack_push_size, long long int *return_value)
 {
   int status;
   // Ecriture Trap Call Trap au début de la fonction puissance
   const int length = 4;
   char new_inst[4] = {0xCC, 0xFF, 0xD0, 0xCC};
-  char sauv_line[4]; // 20 = taille max d'une instruction (x86 CrInGe)
+  char sauv_line[4]; // 20 = taille max d'une instruction (x86)
   if (write_memory(addr_write_in_fun, new_inst, length, process_pid,
                    sauv_line) == EXIT_FAILURE)
   {
@@ -255,7 +279,7 @@ int trap_call_trap(long addr_write_in_fun, int process_pid, long addr_fun_call,
   ptrace(PTRACE_CONT, process_pid, 0, 0);
 
   // Wait for the first trap
-  printf("pid: %d first trap\n", waitpid(process_pid, &status, 0));
+  printf("----- First trap ----- pid : %d\n", waitpid(process_pid, &status, 0));
 
   // Recuperation de la valeur des registres
   struct user_regs_struct regs;
@@ -274,13 +298,11 @@ int trap_call_trap(long addr_write_in_fun, int process_pid, long addr_fun_call,
       regs.rsp -= args_fun[i];
       // On ajoute une valeur dans la pile
       // printf("regs.rsp : %p\n", regs.rsp);
-      // char new_val[4] = {42, 0, 0, 0};
-      char buffer[4] = {0, 0, 0, 0};
 
       printf("Ecriture stack args_fun %d %d, offset %d\n", i, args_fun[i],
              offset);
       if (write_memory(regs.rsp, new_value_stack + offset, args_fun[i],
-                       process_pid, buffer) == -1)
+                       process_pid, NULL) == -1)
       {
         printf(
             "Erreur lors de l'appel de write_memory pour changer la stack\n");
@@ -299,18 +321,23 @@ int trap_call_trap(long addr_write_in_fun, int process_pid, long addr_fun_call,
 
   // Modifier les valeurs des registres
   ptrace(PTRACE_SETREGS, process_pid, 0, &regs);
-
   ptrace(PTRACE_CONT, process_pid, 0, 0);
 
   // Wait for the second trap
-  printf("pid: %d second trap\n", waitpid(process_pid, &status, 0));
+  printf("----- Second trap ----- pid : %d\n",
+         waitpid(process_pid, &status, 0));
 
   ptrace(PTRACE_GETREGS, process_pid, 0, &regs);
+  if (return_value != NULL)
+  {
+    *return_value = regs.rax;
+  }
   printf("rax : %p\n", regs.rax);
   for (int i = 0; i < stack_push_size; i++)
   {
     char res;
-    if (read_memory(regs.rsp + i * sizeof(char), 1, process_pid, &res) == EXIT_FAILURE)
+    if (read_memory(regs.rsp + i * sizeof(char), 1, process_pid, &res) ==
+        EXIT_FAILURE)
     {
       printf("Erreur lors de l'appel de read_memory pour lire la stack\n");
       return EXIT_FAILURE;
@@ -319,10 +346,8 @@ int trap_call_trap(long addr_write_in_fun, int process_pid, long addr_fun_call,
   }
 
   // Reecriture des lignes effacees
-  char buffer[sizeof(
-      long long int)]; // stocke les anciennes valeurs des instructions (trap call trap)
-
-  // printf("Réecriture des lignes\n");
+  char buffer[sizeof(long long int)]; // stocke les anciennes valeurs des
+                                      // instructions (trap call trap)
 
   if (write_memory(addr_write_in_fun, sauv_line, length, process_pid, buffer) ==
       EXIT_FAILURE)
@@ -331,54 +356,48 @@ int trap_call_trap(long addr_write_in_fun, int process_pid, long addr_fun_call,
     return EXIT_FAILURE;
   }
   sauv_regs.rip = sauv_regs.rip - 1;
-
   ptrace(PTRACE_SETREGS, process_pid, 0, &sauv_regs);
-
   ptrace(PTRACE_CONT, process_pid, 0, 0);
-  printf("End of tct\n");
   return EXIT_SUCCESS;
 }
 
 int main(int argc, char **argv)
 {
   printf("sizeof(int) = %d\n", sizeof(int));
+  printf("sizeof(long) = %d\n", sizeof(long));
+  printf("sizeof(long long int) = %d\n", sizeof(long long int));
+  printf("sizeof(long long int *) = %d\n", sizeof(long long int *));
+
+  printf("---------- Recuperation pid et adresses des fonctions ----------\n");
   int process_pid = get_pid();
   long addr_puissance = get_adr_fun(argv[1]);
   long addr_puissance_opti = get_adr_fun(argv[2]);
   long addr_posix_memalign = get_adr_fun("posix_memalign");
   long addr_mprotect = get_adr_fun("__mprotect");
 
-  printf("long addr_mprotect : %p", addr_mprotect);
-
-  // 1. Attacher au processus cible
+  // Attacher au processus cible
   if (ptrace(PTRACE_ATTACH, process_pid, 0, 0) == -1)
   {
     printf("ptrace_attach a echoue\n");
     return EXIT_FAILURE;
   }
-  // {
-  //   printf("--------------trap call trap addition\n");
-  //   int status;
-  //   printf("pid: %d\n", waitpid(process_pid, &status, 0));
-  //   long long int args_fun[3] = {sizeof(int), 0, 0};
-  //   bool args_ptr[3] = {true, false, false};
-  //   int stack_push_size = 0;
-  //   for (int i = 0; i < 3; i++) {
-  //     if (args_ptr[i]) {
-  //       stack_push_size += args_fun[i];
-  //     }
-  //   }
-  //   char *return_stack = malloc(stack_push_size);
-  //   char new_value_stack[4] = {23, 0, 0, 0};
+  int status;
+  printf("pid: %d\n", waitpid(process_pid, &status, 0));
 
-  //   // Tester le cas pthologique ou PC = adr ou PC = adr+1 ou Pc = adr+2
-  //   trap_call_trap(addr_puissance, process_pid, addr_puissance_opti,
-  //   args_fun,
-  //                  args_ptr, new_value_stack, return_stack, stack_push_size);
-  //   free(return_stack);
-  // }
-  int size_code = 113;
-  char code[113] = {
+  {
+    printf("---------- Trap call trap addition ----------\n");
+    long long int args_fun[3] = {sizeof(int), 0, 0};
+    bool args_ptr[3] = {true, false, false};
+    int stack_push_size = 4;
+    char *return_stack = malloc(stack_push_size);
+    char new_value_stack[4] = {23, 0, 0, 0};
+    trap_call_trap(addr_puissance, process_pid, addr_puissance_opti, args_fun,
+                   args_ptr, new_value_stack, return_stack, stack_push_size,
+                   NULL);
+    free(return_stack);
+  }
+  int size_code = 115;
+  char code[115] = {
       0x55, 0x48, 0x89, 0xe5, 0x48, 0x83, 0xec, 0x20, 0x89, 0x7d, 0xec, 0x89,
       0x75, 0xe8, 0x8b, 0x45, 0xec, 0x89, 0x45, 0xfc, 0x83, 0x7d, 0xe8, 0x00,
       0x79, 0x4d, 0x48, 0x8d, 0x05, 0xe0, 0x47, 0x07, 0x00, 0x48, 0x89, 0xc7,
@@ -390,10 +409,15 @@ int main(int argc, char **argv)
       0x89, 0x45, 0xfc, 0x83, 0x6d, 0xe8, 0x01, 0x83, 0x7d, 0xe8, 0x01, 0x7f,
       0xc8, 0x8b, 0x45, 0xfc, 0xc9};
 
-  printf("--------------trap call trap posix meme align\n");
+  // int size_code = 56;
+  // char code[56] = {0x55, 0x48, 0x89, 0xe5, 0x48, 0x83, 0xec, 0x20, 0x89, 0x7d,
+  //                  0xec, 0x89, 0x75, 0xe8, 0x8b, 0x55, 0xec, 0x8b, 0x45, 0xe8,
+  //                  0x01, 0xd0, 0x89, 0x45, 0xfc, 0x8b, 0x55, 0xe8, 0x8b, 0x45,
+  //                  0xec, 0x89, 0xc6, 0x48, 0x8d, 0x05, 0xf2, 0x47, 0x07, 0x00,
+  //                  0x48, 0x89, 0xc7, 0xb8, 0x00, 0x00, 0x00, 0x00, 0xe8, 0xbc,
+  //                  0x2f, 0x00, 0x00, 0x90, 0xc9, 0xc3};
 
-  int status;
-  printf("pid: %d\n", waitpid(process_pid, &status, 0));
+  printf("---------- Trap call trap posix meme align ----------\n");
 
   long long int args_fun[3] = {sizeof(long long int), getpagesize(), size_code};
   bool args_ptr[3] = {true, false, false};
@@ -413,8 +437,8 @@ int main(int argc, char **argv)
 
   // Tester le cas pathologique ou PC = adr ou PC = adr+1 ou Pc = adr+2
   if (trap_call_trap(addr_puissance, process_pid, addr_posix_memalign, args_fun,
-                     args_ptr, new_value_stack, return_stack,
-                     stack_push_size) == EXIT_FAILURE)
+                     args_ptr, new_value_stack, return_stack, stack_push_size,
+                     NULL) == EXIT_FAILURE)
   {
     printf("Erreur dans trap call trap posix mem align\n");
     return EXIT_FAILURE;
@@ -424,46 +448,60 @@ int main(int argc, char **argv)
 
   printf("Pointer of the free memory %llx\n", *addr_puissance_opti_heap);
 
-  printf("--------------trap call trap mprotect\n");
+  printf("----------- Trap call trap mprotect ----------\n");
 
   char return_stack_mprotect[4] = {0, 0, 0, 0};
-
-  printf("sizeof ptr: %d\n", sizeof(addr_puissance_opti));
-  status;
-  // printf("pid: %d\n", waitpid(process_pid, &status, 0));
-  long long int args_fun_mprotect[3] = {(long long int)return_stack, size_code,
-                                        PROT_EXEC | PROT_WRITE | PROT_READ};
+  // char protection[8] = {0, 0, 0, 0, 0, 0, 0, PROT_EXEC | PROT_WRITE | PROT_READ};
+  // char protection[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+  char protection = PROT_EXEC | PROT_WRITE | PROT_READ;
+  long long int args_fun_mprotect[3] = {*addr_puissance_opti_heap, size_code,
+                                        (long long int)PROT_EXEC};
   bool args_ptr_mprotect[3] = {false, false, false};
-
-  // int args_fun[3] = {sizeof(int), 0, 0};
-  // bool args_ptr[3] = {true, false, false};
   stack_push_size = 0;
-  for (int i = 0; i < 3; i++)
-  {
-    if (args_ptr[i])
-    {
-      stack_push_size += args_fun[i];
-    }
-  }
   char new_value_stack_mprotect[8] = {0, 0, 0, 0, 0, 0, 0, 0};
   // char new_value_stack_mprotect[8] = {
   //     return_stack[0], return_stack[1], return_stack[2], return_stack[3],
   //     return_stack[4], return_stack[5], return_stack[6], return_stack[7]};
 
   // Tester le cas pathologique ou PC = adr ou PC = adr+1 ou Pc = adr+2
-  if (trap_call_trap(addr_puissance, process_pid, addr_mprotect, args_fun,
-                     args_ptr, new_value_stack_mprotect, return_stack_mprotect,
-                     stack_push_size) == EXIT_FAILURE)
+  long long int return_value;
+  if (trap_call_trap(addr_puissance, process_pid, addr_mprotect,
+                     args_fun_mprotect, args_ptr_mprotect,
+                     new_value_stack_mprotect, return_stack_mprotect,
+                     stack_push_size, &return_value) == EXIT_FAILURE)
   {
     printf("Erreur dans trap call trap mprotect\n");
     return EXIT_FAILURE;
   };
 
+  //  EACCES The prot argument specifies a protection that violates the access
+  //  permission the process has to the underlying memory object.
+
+  //  EAGAIN The prot argument specifies PROT_WRITE over a MAP_PRIVATE mapping
+  //  and there are insufficient memory resources to reserve for locking the
+  //  private page.
+
+  //  ENOMEM Addresses in the range [addr,addr+len) are invalid for the
+  //  address space of a process, or specify one or more pages which are not
+  //  mapped.
+
+  //  ENOMEM The prot argument specifies PROT_WRITE on a MAP_PRIVATE mapping,
+  //  and it would require more space than the system is able to supply for
+  //  locking the private pages, if required.
+
+  //  ENOTSUP
+  //         The implementation does not support the combination of accesses
+  //         requested in the prot argument.
+
+  //  The mprotect() function may fail if:
+
+  //  EINVAL The addr argument is not a multiple of the page size as returned
+  //  by sysconf().
+
   // Ecriture du programme dans la heap
-  char buffer[113];
-  printf("Ecriture du programme dans la heap\n");
-  if (write_memory(addr_puissance_opti_heap, code, size_code, process_pid,
-                   buffer) == EXIT_FAILURE)
+  printf("---------- Ecriture du programme dans la heap ----------\n");
+  if (write_memory(*addr_puissance_opti_heap, code, size_code, process_pid,
+                   NULL) == EXIT_FAILURE)
   {
     printf(
         "Erreur lors de l'appel de write_memory du programme dans la heap\n");
@@ -472,28 +510,43 @@ int main(int argc, char **argv)
 
   // Write in memory Jump to this programm (in the heap)
   // in the function puissance that is called very often
-  printf("Write Jump in puissance\n");
-  char buffer_jump[12];
-  printf("Ecriture du programme dans la heap\n");
+  printf("---------- Ecriture Jump (vers le programme dans la heap) in "
+         "puissance ----------\n");
+  for (int i = 0; i < 8; i++)
+  {
+    printf("r_s[%d] = 0x%X\n", i, return_stack[i]);
+  }
+  // char jump_code[12] = {0x48,
+  //                       0xb8,
+  //                       return_stack[7],
+  //                       return_stack[6],
+  //                       return_stack[5],
+  //                       return_stack[4],
+  //                       return_stack[3],
+  //                       return_stack[2],
+  //                       return_stack[1],
+  //                       return_stack[0],
+  //                       0xff,
+  //                       0xe0};
+  // char 0x000000000040180f
   char jump_code[12] = {0x48,
                         0xb8,
-                        return_stack[0],
-                        return_stack[1],
-                        return_stack[2],
-                        return_stack[3],
-                        return_stack[4],
-                        return_stack[5],
-                        return_stack[6],
-                        return_stack[7],
+                        0x0,
+                        0x0,
+                        0x0,
+                        0x0,
+                        0x0,
+                        0x40,
+                        0x18,
+                        0x0f,
                         0xff,
                         0xe0};
-  if (write_memory(addr_puissance, jump_code, 12, process_pid, buffer_jump) ==
-      EXIT_FAILURE)
-  {
-    printf(
-        "Erreur lors de l'appel de write_memory du programme dans la heap\n");
-    return EXIT_FAILURE;
-  }
+  // if (write_memory(addr_puissance, jump_code, 12, process_pid, NULL) ==
+  //     EXIT_FAILURE)
+  // {
+  //   printf("Erreur lors de l'appel de write_memory du jump\n");
+  //   return EXIT_FAILURE;
+  // }
 
   // Continuer l'éxécution du processus avec le nouveau code
   ptrace(PTRACE_CONT, process_pid, 0, 0);
@@ -502,5 +555,7 @@ int main(int argc, char **argv)
   ptrace(PTRACE_DETACH, process_pid, 0, 0);
 
   free(return_stack);
+
+  printf("---------- FIN du traçant ----------\n");
   return EXIT_SUCCESS;
 }
