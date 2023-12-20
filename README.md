@@ -1,79 +1,74 @@
 # TP-User-SEA
+## Lancer le projet
 
+- `make tracant` pour compiler le traçant
+- `make trace` pour compiler le tracé
+- `make full` pour lancer `make trace` et `make tracant`
+- `make clean` pour clean les fichiers de build
+- `make run_tracant` pour lancer le traçant
+- `make run_trace` pour lancer le tracé
 
-- comment compiler pour fixer les adresses des fonctions et variables
-```bash
-gcc -no-pie main.c -o main
-```
+Il faut toujours lancer le tracé avant le traçant.
 
-- Vérifier les processus en cours et récupérer le pid
-```bash
-ps -aux | grep "main"
-```
-- pid c'est le 2e, 6chiffres
+## Option de Compilation
 
+Toutes les options de compilation utilisées sont écrites dans le makefile.
 
-- Kill un processus en cours avec le pid
-```bash
-kill -9 <pid>
-```
-
-
-# TODO
-- automatiser recup pid
-```bash
-touch pid.txt
-```
-```C
-system(ps -aux | grep "./main" | cut -c 12-17 | head -n 1 > pid.txt)
-```
-    - lire fichier.txt dans le programme
-- automatiser recup addr func 
+## Config sur lequel tout le TP a été fait
 
 ```bash
-touch addr.txt
+OS: Manjaro Linux x86_64
+Kernel: 5.15.131-1-MANJARO 
+Packages: 1467 (pacman), 6 (flatpak), 4 (snap) 
+Shell: bash 5.1.16 
+DE: Plasma 5.27.8 
+WM: KWin 
+CPU: AMD Ryzen 5 5500U with Radeon Graphics (12) @ 2.100GHz 
+GPU: AMD ATI 04:00.0 Lucienne 
+Memory: 15315MiB 
 ```
-```C
-system(nm main | grep "puissance" | cut -c 1-16 > addr.txt)
-```
 
+## Ce qui a été fait
 
+### Challenge 1
 
+S'attacher à un processus et écrire un trap qui arrête
+l'éxécution du tracé.
 
+Etat : FAIT
 
-on peut pas changer le rip(PC) comme des bourrins parce que ça nique les ret
+### Challenge 2
 
-quand on est le tracant d'un tracé on récupère tous les signaux -> notamment les sig_trap qui sont lancés par l'instruction trap
+Appel de toute fonction qui est déjà écrite dans le tracé (nous compilons en statique, nous avons donc accès dans le code du programme à toutes les fonctions de la libc qui est importée).
 
-le tricks d'écrire 
-trap call
-trap
+Ceci a été fait pour fonctions qui prennent en paramètre tout type et renvoie tout type. En effet nous supportons les paramètres pointeurs. Ces pointeurs sont des pointeurs vers la stack. Nous avons préalablement décalé le pointeur de stack et avons écrit une valeur initiale de cet emplacement de la stack.
 
-dans un bout de code qui s'éxécute souvent
-on va ensuite faire waitpid pour le premier trap 
-onn récup les registre avec ptrace(pgetregs)
-(la fonction s'éxécute)
-on attend le deuxième trap pour arreter de nouveau la fonction
-on verifie le retour de la fonction (on peit meme l'utiliser)
-on remet les registres précedent sauf ceux qu'on a modif (peut etre faire des dingueries avec rip)
-réecrit les lignes qu'on a utilisé.
+Toutes les fonctions qui ont été testé :
+- `posix_memalign`
+- `mprotect`
+- `int foo(int, int)`
+- `int* foo(int, int)`
+- `int* foo(int*, int*)`
 
+Etat : FAIT
 
+### Challenge 3
 
-potentiellement on veut aprtir direct de la fonction non optimisé (infinite)
+Appel à Posix_memalign avec ce qui a été fait dans le challenge 2.
+Appel à m_protect avec ce qui a été fait dans le challenge 2.
 
+Etat : FAIT
 
-On remet les registres precedents (prtrace(PSETREGS, ...))
-while(1){
+### Challenge 4
 
-    // arretere le programme a un endroit random
-    waitpid()
-    // Ecriture de trap call / trap / ret dans un endroit execute regulierement et souvenir des lignes overwrite
-    waitpid du 1e trap
-    recup des registres + set args du call
-    ptrace cont
-    waitpid du 2e trap
-    verif du retour
-    reecrire les bonnes lignes /?\ Sortir de la fonction /?\
-    
-}
+- Avec l'appel à Posix_memalign, on alloue la place nécéssaire pour écrire une fonction custom dans la heap. 
+- On rend cette partie de la heap exécutable avec l'appel à m_protect.
+- Ecriture de la fonction dans cette endroit de la heap
+
+> Tout ceci a été fait, vérifié et semble fonctionner.
+
+Ecriture du Jump vers cette fonction dans la heap dans le programme tracé.
+
+> Ceci ce fonctionne pas. Quelque soit la fonction écrite dans la heap.
+
+Etat : Non fonctionnel lorsqu'on écrit le jump vers notre fonction écrite dans la heap. Le tracé renvoie l'erreur "segfault". Ce problème n'a pas été résolu.

@@ -1,16 +1,19 @@
-user:
+tracant:
 	gcc main.c -o TP_User_SEA
 
-toy:
-	gcc -no-pie -static toy_c_program/toy_c_program.c -o toy_c_program/toy_c_program
+trace:
+	gcc -no-pie -static toy_c_program.c -o toy_c_program
 
 clean:
 	rm TP_User_SEA
-	rm toy_c_program/toy_c_program
+	rm toy_c_program
 
-run:
+run_tracant:
 	./TP_User_SEA puissance addition
-	
+
+run_trace:
+	./toy_c_program	
+
 full:
-	make user
-	make toy
+	make tracant
+	make trace
